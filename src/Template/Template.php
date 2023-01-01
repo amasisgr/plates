@@ -181,7 +181,7 @@ class Template
                     $layoutName = $this->layoutName[$i];
                     $layoutData = $this->layoutData[$i];
                     
-                    $layout = $this->engine->make($this->layoutName);
+                    $layout = $this->engine->make($layoutName);
                     $layout->sections = array_merge($currentSections, array('content' => $content));
                     $content = $layout->render($layoutData);
                     
