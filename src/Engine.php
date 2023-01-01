@@ -285,19 +285,43 @@ class Engine
      * @param  string   $name
      * @return Template
      */
-    public function make($name)
-    {
-        return new Template($this, $name);
+    public function make($name, $data = []) {
+        $tpl = new Template($this, $name, $data);
+        return $tpl;
     }
 
     /**
-     * Create a new template and render it.
+     * Create a new template and render it, with given layout(s).
+     * When layouts array is provided, it's used as provided outwards (see Plates_Template->layouts)
+     *
+     * Signatures:
+     * render(tplName, tplData)
+     * render(tplName, tplData, layoutName, layoutData)
+     * render(tplName, tplData, [ [layoutName1, layoutData1], [layoutName2, layoutData2], ... ])
+     *
      * @param  string $name
      * @param  array  $data
+     * @param array|string|null $layoutName If porovided sets the layout of the template to use
+     * @param closure|mixed|null $layoutData If not provided, template data is given for layout. If empty, nothing is passed.
+     *  If it's a closure, it's called with $data as parameter, and the result is the new $layoutData.
      * @return string
      */
-    public function render($name, array $data = array())
+    public function render($tplName, array $tplData = [], $layoutName = null, mixed $layoutData = null)
     {
-        return $this->make($name)->render($data);
+        $tpl = $this->make($tplName);
+        
+        if(!empty($layoutName)) {
+            $layouts = is_array($layoutName)? $layoutName: [[$layoutName, $layoutData]];
+            
+            $NAME = 0; $DATA = 1;
+            foreach($layouts as &$layout) {
+                $layout[$DATA] = !isset($layout[$DATA]) || $layout[$DATA] === null? $tplData: $layout[$DATA];
+                if(is_callable($layout[$DATA])) $layout[$DATA] = $layout[$DATA]($tplData);
+            } unset($layout);
+        }
+        
+        if(!empty($layouts)) $tpl->layouts($layouts);
+        
+        return $tpl->render($tplData);
     }
 }
