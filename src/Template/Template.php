@@ -62,27 +62,28 @@ class Template
 
     /**
      * The name of the template layout.
-     * @var string
+     * @var array
      */
-    protected $layoutName;
+    protected $layoutName = [];
 
     /**
      * The data assigned to the template layout.
      * @var array
      */
-    protected $layoutData;
+    protected $layoutData = [];
 
     /**
      * Create new Template instance.
      * @param Engine $engine
      * @param string $name
      */
-    public function __construct(Engine $engine, $name)
+    public function __construct(Engine $engine, $name, $data = [])
     {
         $this->engine = $engine;
         $this->name = new Name($engine, $name);
 
         $this->data($this->engine->getData($name));
+        $this->data($data);
     }
 
     /**
@@ -114,11 +115,10 @@ class Template
      */
     public function data(array $data = null)
     {
-        if (is_null($data)) {
-            return $this->data;
-        }
+        if (!func_num_args()) return $this->data;
 
-        $this->data = array_merge($this->data, $data);
+        $this->data = is_null($data)? []: array_merge($this->data, $data);
+        return $this;
     }
 
     /**
@@ -157,6 +157,8 @@ class Template
      */
     public function render(array $data = array())
     {
+        $prev_data = $this->data;
+        
         $this->data($data);
         unset($data);
         extract($this->data);
@@ -172,12 +174,22 @@ class Template
             $content = ob_get_clean();
 
             if (isset($this->layoutName)) {
-                $layout = $this->engine->make($this->layoutName);
-                $layout->sections = array_merge($this->sections, array('content' => $content));
-                $content = $layout->render($this->layoutData);
+                
+                $l = count($this->layoutName);
+                $currentSections = $this->sections;
+                for($i = 0; $i < $l; $i++) {
+                    $layoutName = $this->layoutName[$i];
+                    $layoutData = $this->layoutData[$i];
+                    
+                    $layout = $this->engine->make($this->layoutName);
+                    $layout->sections = array_merge($currentSections, array('content' => $content));
+                    $content = $layout->render($layoutData);
+                    
+                    $currentSections = $layout->sections;
+                }
             }
-
-            return $content;
+            
+            $toReturn = $content;
         } catch (Throwable $e) {
             while (ob_get_level() > $level) {
                 ob_end_clean();
@@ -185,20 +197,82 @@ class Template
 
             throw $e;
         }
+        
+        $this->data = $prev_data;
+        return $toReturn;
     }
 
     /**
      * Set the template's layout.
      * @param  string $name
      * @param  array  $data
-     * @return null
+     * @return Template|array
      */
-    public function layout($name, array $data = array())
+    public function layout($name = null, array $data = array())
     {
-        $this->layoutName = $name;
-        $this->layoutData = $data;
+        if(empty($name)) return $this->layoutName;
+        
+        $this->layoutName = [$name];
+        $this->layoutData = [$data];
+        return $this;
     }
-
+    
+    /**
+     * Set the template's layout, and return self.
+     * @param  array  $layouts Each row must be an array, where [0] is the Layout name and [1] layout data.
+     * @param  bool $outwards Defines the order with which the layouts are provided.
+     *  Outwards means first is provided the innermost layout, and then going towards the "top" / outermost layout.
+     * @return Plates_Template|array
+     */
+    public function layouts($layouts = [], $outwards = true)
+    {
+      if(empty($layouts)) return $this->layoutName;
+      
+      $this->layoutName = [];
+      $this->layoutData = [];
+      foreach($layouts as $layout) $this->layoutAdd($outwards? 0: 1, $layout[0], $layout[1]?: []);
+      return $this;
+    }
+    
+    /**
+     * Adds to the template's layouts, and return self.
+     * @param  bool $before Should this layout be rendered before any other? Or after.
+     *    In otherwords, is it towards the bottom, or the top? Is it innermost, or outermost?
+     *    Default behaviour is that new layouts added are stacked outsite/above/after.
+     * @param  string $name
+     * @param  array  $data
+     * @return Plates_Template
+     */
+    public function layoutAdd($before = 0, $name = null, array $data = array())
+    {
+      if(empty($name)) return $this;
+      
+      $func = $before? 'array_unshift': 'array_push';
+      call_user_func_array($func, [&$this->layoutName, $name]);
+      call_user_func_array($func, [&$this->layoutData, $data]);
+      return $this;
+    }
+    
+    /**
+     * Adds to the template's layouts, and return self.
+     * @param  bool $before Should this layout be rendered before any other? Or after.
+     *    In otherwords, is it towards the bottom, or the top? Is it innermost, or outermost?
+     *    Default behaviour is that new layouts added are stacked outsite/above/after.
+     * @param  array  $layouts Each row must be an array, where [0] is the Layout name and [1] layout data.
+     * @param  bool $outwards Defines the order with which the layouts are provided.
+     *  Outwards means first is provided the innermost layout, and then going towards the "top" / outermost layout.
+     * @return Plates_Template
+     */
+    public function layoutsAdd($before = 0, $layouts = [], $outwards = true)
+    {
+      if(empty($layouts)) return $this;
+      
+      if($before == $outwards) $layouts = array_reverse($layouts);
+      
+      foreach($layouts as $layout) $this->layoutAdd($before, $layout[0], $layout[1]);
+      return $this;
+    }
+    
     /**
      * Start a new section block.
      * @param  string  $name
@@ -309,24 +383,39 @@ class Template
      * Fetch a rendered template.
      * @param  string $name
      * @param  array  $data
+     * @param [type] $layoutName If porovided sets the layout of the template to use
+     * @param closure|array|null $layoutData If not provided, template data is given for layout. If empty, nothing is passed.
+     *  If it's a closure, it's called with $data as parameter, and the result is the new $layoutData.
      * @return string
      */
-    public function fetch($name, array $data = array())
+    public function fetch($name, array $data = array(), $layoutName = null, mixed $layoutData = null)
     {
-        return $this->engine->render($name, $data);
+        return $this->engine->render($name, $data, $layoutName, $layoutData);
     }
 
     /**
      * Output a rendered template.
      * @param  string $name
      * @param  array  $data
+     * @param [type] $layoutName If porovided sets the layout of the template to use
+     * @param closure|array|null $layoutData If not provided, template data is given for layout. If empty, nothing is passed.
+     *  If it's a closure, it's called with $data as parameter, and the result is the new $layoutData.
      * @return null
      */
-    public function insert($name, array $data = array())
+    public function insert($name, array $data = array(), $layoutName = null, mixed $layoutData = null)
     {
-        echo $this->engine->render($name, $data);
+        echo $this->engine->render($name, $data, $layoutName, $layoutData);
     }
-
+    
+    /**
+     * Create a new template.
+     * @param  string   $name
+     * @return Template
+     */
+    public function make($name, $data = []) {
+        return $this->engine->make($name, $data);
+    }
+      
     /**
      * Apply multiple functions to variable.
      * @param  mixed  $var
