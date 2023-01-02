@@ -320,7 +320,7 @@ class Engine
             } unset($layout);
         }
         
-        if(!empty($layouts)) $tpl->layouts($layouts);
+        if(!empty($layouts)) $tpl->layoutsAdd(0, $layouts);
         
         return $tpl->render($tplData);
     }
