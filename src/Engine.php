@@ -68,7 +68,7 @@ class Engine
     }
 
     public static function fromTheme(Theme $theme, string $fileExtension = 'php'): self {
-        $engine = new self(null, $fileExtension);
+        $engine = new static(null, $fileExtension);
         $engine->setResolveTemplatePath(new ResolveTemplatePath\ThemeResolveTemplatePath($theme));
         return $engine;
     }
@@ -320,7 +320,7 @@ class Engine
             } unset($layout);
         }
         
-        if(!empty($layouts)) $tpl->layoutsAdd(0, $layouts);
+        if(!empty($layouts)) $tpl->layouts($layouts);
         
         return $tpl->render($tplData);
     }

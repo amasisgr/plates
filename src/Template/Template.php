@@ -203,10 +203,10 @@ class Template
     }
 
     /**
-     * Set the template's layout.
+     * Set the template's layout, and return self.
      * @param  string $name
      * @param  array  $data
-     * @return Template|array
+     * @return Template
      */
     public function layout($name = null, array $data = array())
     {
@@ -273,6 +273,9 @@ class Template
       return $this;
     }
     
+    public function getSections() {return $this->sections;}
+    public function setSections($sections) {$this->sections = $sections; return $this;}
+
     /**
      * Start a new section block.
      * @param  string  $name
